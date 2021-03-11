@@ -1,6 +1,6 @@
 # PokéGuesser
 ## Introduction
-Hello there! This program runs a Twitch bot (courtesy of [TwitchLib](https://github.com/TwitchLib/TwitchLib)) that lets you and your chat play a guessing game with Pokémon! The bot will be run locally, on whoever's machine, and it can be connected to any Twitch account you have access to (including your own). 
+Hello there! This program runs a Twitch bot that lets you and your chat play a guessing game with Pokémon! The bot will be run locally, on whoever's machine, and it can be connected to any Twitch account you have access to (including your own). 
 ## Starting up
 The program will first ask to initialize settings, this will only need to be done once. The bot name can be the same as the channel it will be connected to. To find the bot's OAuth, use [this website](https://www.twitchapps.com/tmi/). There are a few extra settings you can manage as well, which allow or disallow moderators to start the game, tells you or hides from you the answer, and sets the default generations to randomely pick from. Once everything is set up, the program will give you the option to change everything when it launches, but will save all the settings locally.
 ## Commands
