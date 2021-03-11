@@ -1,7 +1,7 @@
 ﻿using System.Net.Http;
 using System.Net.Http.Headers;
 
-namespace PokemonGuesser
+namespace PokeGuesser
 {
     public static class ApiHelper
     {

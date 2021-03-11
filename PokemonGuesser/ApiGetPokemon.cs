@@ -2,7 +2,7 @@
 using System.Net.Http;
 using System.Threading.Tasks;
 
-namespace PokemonGuesser
+namespace PokeGuesser
 {
     class ApiGetPokemon
     {
@@ -46,22 +46,22 @@ namespace PokemonGuesser
             }
         }
 
-        public static async Task<Version> GetPokemonVersion(Uri uri)
-        {
-            using (HttpResponseMessage response = await ApiHelper.ApiWebClient.GetAsync(uri))
-            {
-                if (response.IsSuccessStatusCode)
-                {
-                    Version result = await response.Content.ReadAsAsync<Version>();
+        //public static async Task<Version> GetPokemonVersion(Uri uri)
+        //{
+        //    using (HttpResponseMessage response = await ApiHelper.ApiWebClient.GetAsync(uri))
+        //    {
+        //        if (response.IsSuccessStatusCode)
+        //        {
+        //            Version result = await response.Content.ReadAsAsync<Version>();
 
-                    return result;
-                }
-                else
-                {
-                    throw new Exception(response.ReasonPhrase);
-                }
-            }
-        }
+        //            return result;
+        //        }
+        //        else
+        //        {
+        //            throw new Exception(response.ReasonPhrase);
+        //        }
+        //    }
+        //}
 
 
     }

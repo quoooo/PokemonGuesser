@@ -1,100 +1,122 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 using TwitchLib.Client;
 
-namespace PokemonGuesser
+namespace PokeGuesser
 {
     class Program
     {
-        public static TwitchClient twitchClient;
-        public static string channel;
-        public static bool con = false;
-        public static Pokemon pkmn;
+        public static TwitchClient twitchClient { get; set; }
+        public static bool con { get; set; }
+        public static Pokemon pkmn { get; set; }
 
         static void Main(string[] args)
         {
+            con = false;
             Console.WriteLine();
-            Console.WriteLine("Welcome to the world of Pokémon!");
+            Console.WriteLine("Welcome to the world of PokéGuesser!");
             Console.WriteLine("=================");
 
-            #region init strings
-            string[] lines;
-            try
+            #region Init Settings and Client
+            // if settings are blank (default or something broke), initialize settings
+            if (Properties.Settings.Default.botname == "" || !Properties.Settings.Default.oauth.StartsWith("oauth:") || Properties.Settings.Default.channel == "")
             {
-                lines = System.IO.File.ReadAllLines(Directory.GetCurrentDirectory() + "\\credentials.txt");
+                Console.WriteLine("Settings not found. Initializing settings.");
+                CreateInitSettings();
             }
-            catch (Exception)
+            else
             {
+                ConsoleKeyInfo a;
+                Console.WriteLine($"Bot: {Properties.Settings.Default.botname}");
+                Console.WriteLine($"OAuth: [hidden]");
+                Console.WriteLine($"Channel: {Properties.Settings.Default.channel}");
                 Console.WriteLine();
-                Console.WriteLine(Directory.GetCurrentDirectory() + "\\credentials.txt was not found. Creating file.");
-                bool acc = false;
+                Console.WriteLine("To edit Twitch settings, type 't'");
+                Console.WriteLine("To edit extra settings, type 'e'");
+                Console.WriteLine("To continue and connect to Twitch, press enter");
                 do
                 {
-                    acc = CreateInitFile();
-                } while (!acc);
+                    a = Console.ReadKey();
+                } while (!a.KeyChar.Equals('\r') && !a.KeyChar.Equals('e') && !a.KeyChar.Equals('t'));
 
-                lines = System.IO.File.ReadAllLines(Directory.GetCurrentDirectory() + "\\credentials.txt");
+                if (a.KeyChar.Equals('t'))
+                {
+                    Console.WriteLine();
+                    CreateInitSettings();
+                }
+                else if (a.KeyChar.Equals('e'))
+                {
+                    Console.WriteLine();
+                    CreateExtraSettings();
+                }
+                Console.WriteLine();
             }
 
-            string botname, oauth = "";
-            botname = lines[0].Substring(11);
-            botname = botname.Substring(0, botname.Length - 1);
-            channel = lines[2].Substring(10);
-            channel = channel.Substring(0, channel.Length - 1);
-            oauth = lines[1].Substring(8);
-            oauth = oauth.Substring(0, oauth.Length - 1);
-            #endregion
 
-            #region init twitch client
-            ConnectionCredentials credentials = new ConnectionCredentials(botname, oauth);
-            twitchClient = new TwitchClient();
-            twitchClient.Initialize(credentials);
+            // connection to twitch
+            try
+            {
+                if (!Properties.Settings.Default.oauth.StartsWith("oauth:"))
+                {
+                    Properties.Settings.Default.oauth = "oauth:" + Properties.Settings.Default.oauth;
+                }
+                ConnectionCredentials credentials = new ConnectionCredentials(Properties.Settings.Default.botname, Properties.Settings.Default.oauth);
+                twitchClient = new TwitchClient();
+                twitchClient.Initialize(credentials);
+                twitchClient.OnConnected += TwitchClient_OnConnected;
+                //twitchClient.OnMessageReceived += TwitchClient_OnMessageReceived;
+                twitchClient.OnChatCommandReceived += TwitchClient_OnChatCommandReceived;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine();
+                Console.WriteLine("= ERROR =");
+                Console.WriteLine(e.Message);
+                Properties.Settings.Default.botname = "";
+                Properties.Settings.Default.oauth = "";
+                Properties.Settings.Default.Save();
+                Console.WriteLine("Press any key to close. Please relaunch the application.");
+                Console.ReadKey();
+                Environment.Exit(1);
+            }
 
-            twitchClient.OnConnected += TwitchClient_OnConnected;
-            twitchClient.OnMessageReceived += TwitchClient_OnMessageReceived;
-            twitchClient.OnChatCommandReceived += TwitchClient_OnChatCommandReceived;
-
+            // helper for connection to pokeapi.co
             ApiHelper.InitializeClient();
             #endregion
 
             twitchClient.Connect();
             do
             {
+                //TODO: infinite loop check
                 Console.WriteLine("Connecting to Twitch...");
                 Thread.Sleep(500);
             } while (!con);
             con = false;
-            twitchClient.JoinChannel(channel);
-            Console.WriteLine($"{botname} has connected to {channel}'s channel");
+            twitchClient.JoinChannel(Properties.Settings.Default.channel);
+            Console.WriteLine($"{Properties.Settings.Default.botname} has connected to {Properties.Settings.Default.channel}'s channel");
             Console.WriteLine();
-            Herlp();
-
+            Helper();
 
             // wait forever
             Thread.Sleep(Timeout.Infinite);
             Console.WriteLine("End of program");
         }
 
-        #region Chat stuff
+        #region Chat Stuff
         private static void TwitchClient_OnConnected(object sender, TwitchLib.Client.Events.OnConnectedArgs e)
         {
             Console.WriteLine("Connected~");
             con = true;
         }
 
-        private static void TwitchClient_OnMessageReceived(object sender, TwitchLib.Client.Events.OnMessageReceivedArgs e)
-        {
-
-        }
-
         private static void TwitchClient_OnChatCommandReceived(object sender, TwitchLib.Client.Events.OnChatCommandReceivedArgs e)
         {
-            if (e.Command.ChatMessage.IsBroadcaster || e.Command.ChatMessage.UserId == "44114423")
+
+            switch (e.Command.CommandText.ToLower())
             {
-                switch (e.Command.CommandText.ToLower())
-                {
-                    case "pokemon":
+                case "pokemon":
+                    if (e.Command.ChatMessage.IsBroadcaster || (e.Command.ChatMessage.IsModerator && Properties.Settings.Default.modStart))
+                    {
                         if (con)
                         {
                             Random random = new Random();
@@ -103,6 +125,7 @@ namespace PokemonGuesser
                             {
                                 rand = random.Next(pkmn.PokemonSpecies.FlavorTextEntries.Length);
                             } while (pkmn.PokemonSpecies.FlavorTextEntries[rand].Language.Name != "en" || pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText.ToLower().Contains(pkmn.Name));
+                            pkmn.PokemonSpecies.FlavorCurrent = rand;
                             SendMessage("Bonus entry: " + pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText);
                         }
                         else
@@ -116,9 +139,20 @@ namespace PokemonGuesser
                                 GeneratePokemon();
                             }
                         }
-                        break;
-                    case "hint":
+                    }
+                    else
+                    {
                         if (con)
+                        {
+                            SendMessage(pkmn.PokemonSpecies.FlavorTextEntries[pkmn.PokemonSpecies.FlavorCurrent].FlavorText);
+                        }
+                    }
+
+                    break;
+                case "hint":
+                    if (con)
+                    {
+                        if (e.Command.ChatMessage.IsBroadcaster || (e.Command.ChatMessage.IsModerator && Properties.Settings.Default.modHint))
                         {
                             try
                             {
@@ -196,52 +230,76 @@ namespace PokemonGuesser
                                         break;
                                 }
                             }
-                            catch (Exception ee)
+                            catch (Exception ex)
                             {
-                                Console.WriteLine(ee.Message);
+                                Console.WriteLine();
+                                Console.WriteLine("== ERROR ==");
+                                if (pkmn == null)
+                                {
+                                    Console.WriteLine("pkmn is null");
+                                }
+                                Console.WriteLine(ex.Message);
                                 Console.WriteLine("== if you see this, yell at the dev ==");
+                                Console.WriteLine("The program should be safe to continue without relaunching");
                             }
                         }
 
-                        break;
-                    case "tellme":
+                    }
+
+                    break;
+                case "tellme":
+                    if (e.Command.ChatMessage.IsBroadcaster)
+                    {
                         try
                         {
                             Console.WriteLine();
-                            Console.WriteLine("Current Pokémon: " + pkmn.Name.Substring(0, 1).ToUpper() + pkmn.Name.Substring(1));
+                            Console.WriteLine("Current Pokémon: " + pkmn.PokemonSpecies.Name.Substring(0, 1).ToUpper() + pkmn.PokemonSpecies.Name.Substring(1));
+                        }
+                        catch (Exception ex)
+                        {
                             Console.WriteLine();
+                            Console.WriteLine("== ERROR ==");
+                            Console.WriteLine(ex.Message);
                         }
-                        catch (Exception)
+                    }
+                    break;
+                case "help":
+                    if (con && e.Command.ChatMessage.IsBroadcaster)
+                    {
+                        Helper();
+                    }
+                    break;
+                case "end":
+                    if (con && (e.Command.ChatMessage.IsBroadcaster || (e.Command.ChatMessage.IsModerator && Properties.Settings.Default.modStart)))
+                    {
+                        con = false;
+                        SendMessage("Guessing game ended! The Pokémon was " + pkmn.Name.Substring(0, 1).ToUpper() + pkmn.Name.Substring(1) + "!");
+                    }
+                    break;
+                case "guess":
+                    if (e.Command.ArgumentsAsList.Count >= 1 && con)
+                    {
+                        if (e.Command.ArgumentsAsString.ToLower() == pkmn.Name || e.Command.ArgumentsAsString.ToLower() == pkmn.PokemonSpecies.Name)
                         {
-
-                        }
-                        break;
-                    case "help":
-                        Herlp();
-                        break;
-                    case "end":
-                        if (con)
-                        {
+                            SendMessage("Congratulations @" + e.Command.ChatMessage.Username + "! The Pokémon was " + pkmn.Name.Substring(0, 1).ToUpper() + pkmn.Name.Substring(1));
                             con = false;
-                            SendMessage("Guessing game ended! The Pokémon was " + pkmn.Name.Substring(0, 1).ToUpper() + pkmn.Name.Substring(1) + "!");
                         }
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            if (e.Command.CommandText.ToLower() == "guess" && e.Command.ArgumentsAsList.Count >= 1 && con)
-            {
-                if (e.Command.ArgumentsAsString.ToLower() == pkmn.Name)
-                {
-                    SendMessage("Congratulations @" + e.Command.ChatMessage.Username + "! The Pokémon was " + pkmn.Name.Substring(0, 1).ToUpper() + pkmn.Name.Substring(1));
-                    con = false;
-                }
+                    }
+                    break;
+                default:
+                    break;
             }
         }
 
-        private static async void GeneratePokemon(int generation = 0)
+        private static void GeneratePokemon()
+        {
+            Random r = new Random();
+            int generation;
+            generation = r.Next(Properties.Settings.Default.defaultGenerationMin, (Properties.Settings.Default.defaultGenerationMax + 1));
+            GeneratePokemon(generation);
+        }
+
+        private static async void GeneratePokemon(int generation)
         {
             try
             {
@@ -288,15 +346,27 @@ namespace PokemonGuesser
                 do
                 {
                     rand = r.Next(pkmn.PokemonSpecies.FlavorTextEntries.Length);
-                } while (pkmn.PokemonSpecies.FlavorTextEntries[rand].Language.Name != "en" || pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText.ToLower().Contains(pkmn.Name));
+                } while (pkmn.PokemonSpecies.FlavorTextEntries[rand].Language.Name != "en" || pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText.ToLower().Contains(pkmn.Name) || pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText.ToLower().Contains(pkmn.PokemonSpecies.Name));
 
                 SendMessage(pkmn.PokemonSpecies.FlavorTextEntries[rand].FlavorText + " (" + pkmn.PokemonSpecies.Generation.Name + ")");
+                if (Properties.Settings.Default.tellMe)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Current Pokémon: " + pkmn.PokemonSpecies.Name.Substring(0, 1).ToUpper() + pkmn.PokemonSpecies.Name.Substring(1));
+                }
                 con = true;
             }
             catch (Exception e)
             {
+                Console.WriteLine();
+                Console.WriteLine("== ERROR ==");
                 Console.WriteLine(e.Message);
+                if (pkmn == null)
+                {
+                    Console.WriteLine("pkmn is null");
+                }
                 Console.WriteLine("== if you see this, yell at the dev ==");
+                Console.WriteLine("The program should be safe to continue without relaunching");
             }
         }
 
@@ -304,12 +374,12 @@ namespace PokemonGuesser
         {
             if (twitchClient.IsConnected)
             {
-                twitchClient.SendMessage(channel, s);
+                twitchClient.SendMessage(Properties.Settings.Default.channel, s);
             }
         }
         #endregion
 
-        private static void Herlp()
+        private static void Helper()
         {
             Console.WriteLine("========== HOW TO USE ==========");
             Console.WriteLine("The broadcaster has multiple commands for the guessing game");
@@ -317,65 +387,144 @@ namespace PokemonGuesser
             Console.WriteLine(" - If one is already started, show another dex entry for that Pokémon");
             Console.WriteLine(" - You can specify a generation with a number. ex: !pokemon 3 for gen 3");
             Console.WriteLine("!hint - display a hint");
-            Console.WriteLine(" - There are different hints, they can be specified as an argument. ex: !hint type");
-            Console.WriteLine(" - The hints are: type, ability, biometrics, colour, special, name");
-            Console.WriteLine(" - biometrics gives the height and weight, 'height' and 'weight' can also be used as arguments instead");
+            Console.WriteLine(" - Different hints can be specified as an argument. ex: !hint type");
+            Console.WriteLine(" - The hints are: type, ability, biometrics, colour, special, name, random");
+            Console.WriteLine(" - biometrics gives the height and weight of the Pokémon");
+            Console.WriteLine("'height' and 'weight' can also be used as arguments instead");
             Console.WriteLine(" - special denotes if a Pokémon is a baby, legendary or mythical Pokémon");
-            Console.WriteLine(" - name will give the length of the Pokmon's name");
+            Console.WriteLine(" - name will give the length of the Pokémon's name");
             Console.WriteLine("!tellme - tells you the Pokémon");
             Console.WriteLine(" - this command will display the Pokémon in this Console");
             Console.WriteLine("!end - end the current game");
-            Console.WriteLine("Viewers can use the !guess command to attempt to guess the Pokémon. ex: !guess sandshrew");
+            Console.WriteLine("Viewers can use the !guess command to guess the Pokémon. ex: !guess sandshrew");
+            Console.WriteLine("If someone guesses correctly, the game will end");
             Console.WriteLine("================================");
             Console.WriteLine();
         }
 
-        private static bool CreateInitFile()
+        private static bool CreateInitSettings()
         {
-            string creds = "";
             Console.WriteLine();
-            Console.WriteLine("=================");
+            Console.WriteLine("===== Settings =====");
             Console.WriteLine("Enter the bot's twitch username:");
-            creds += "Username: \"" + Console.ReadLine().ToLower() + "\"" + Environment.NewLine;
+            Properties.Settings.Default.botname = Console.ReadLine().ToLower();
             Console.WriteLine("Enter the bot's OAuth token - you can find it at twitchapps.com/tmi");
-            creds += "OAuth: \"" + Console.ReadLine() + "\"" + Environment.NewLine;
+            Properties.Settings.Default.oauth = Console.ReadLine();
             Console.WriteLine("Enter the twitch account the bot will join:");
-            creds += "Channel: \"" + Console.ReadLine() + "\"" + Environment.NewLine;
+            Properties.Settings.Default.channel = Console.ReadLine();
 
             string accept;
             do
             {
                 Console.WriteLine();
-                Console.WriteLine("Are these settings ok? (y/n)" + Environment.NewLine + creds);
+                Console.WriteLine("Would you like to edit the extra settings? (y/n)");
+                accept = Console.ReadLine().ToLower();
+            } while (accept != "y" && accept != "n");
+            if (accept == "y") CreateExtraSettings();
+
+            string creds =
+    $"Bot Username: \"{Properties.Settings.Default.botname}\"{Environment.NewLine}" +
+    $"OAuth: \"{Properties.Settings.Default.oauth}\"{Environment.NewLine}" +
+    $"Channel: \"{Properties.Settings.Default.channel}\"{Environment.NewLine}" +
+    $"Default generations: {Properties.Settings.Default.defaultGenerationMin}-{Properties.Settings.Default.defaultGenerationMax}{Environment.NewLine}" +
+    $"Answer in console: {Properties.Settings.Default.tellMe}{Environment.NewLine}" +
+    $"Moderators can start game: {Properties.Settings.Default.modStart}{Environment.NewLine}" +
+    $"Moderators can request hint: {Properties.Settings.Default.modHint}";
+
+            do
+            {
+                Console.WriteLine();
+                Console.WriteLine("=================" + Environment.NewLine + creds + Environment.NewLine + "Are these settings ok? (y/n)");
                 accept = Console.ReadLine().ToLower();
             } while (accept != "y" && accept != "n");
 
 
-            if (accept == "y".ToLower())
+            if (accept == "y")
             {
-                creds += Environment.NewLine + "You may edit any of these variables here." + Environment.NewLine +
-                    "For the bot username and channel, make sure they are lowercase." + Environment.NewLine +
-                    "OAuth can be found here: https://www.twitchapps.com/tmi/";
+                Properties.Settings.Default.Save();
+                Console.WriteLine("Settings have been saved");
 
-                try
-                {
-                    File.WriteAllText(Directory.GetCurrentDirectory() + "\\credentials.txt", creds);
-                    Console.WriteLine();
-                    Console.WriteLine(Directory.GetCurrentDirectory() + "\\credentials.txt has been written.");
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Could not write to " + Directory.GetCurrentDirectory() + " - the file will be written in the folder the program is run from, please move it to a writable folder.");
-                    Console.WriteLine("Press any key to close");
-                    Console.ReadLine();
-                    Environment.Exit(1);
-                }
                 return true;
             }
             else
             {
                 return false;
             }
+        }
+
+        private static void CreateExtraSettings()
+        {
+            Console.WriteLine();
+            Console.WriteLine("== Extra settings ==");
+            bool goodInt;
+            string tempstring = "";
+            int tempint = 0;
+            do
+            {
+                do
+                {
+                    Console.WriteLine("Enter the minimum generation by default (1-8, or type help)");
+                    tempstring = Console.ReadLine();
+                    goodInt = Int32.TryParse(tempstring, out tempint);
+                    if (tempstring.ToLower() == "help")
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("By default, the !pokemon command will pick a random generation from gen 1-8");
+                        Console.WriteLine("if you would like to exclude certain generations, you can edit the default");
+                        Console.WriteLine("ex: if the minimum generation is 2, all gen 1 Pokémon will be excluded,");
+                        Console.WriteLine("  but gen 1 Pokémon can still be picked with '!pokemon 1'");
+                    }
+                } while (!goodInt);
+                Properties.Settings.Default.defaultGenerationMin = tempint;
+
+                do
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Enter the maximum generation by default (1-8, or type help)");
+                    tempstring = Console.ReadLine();
+                    goodInt = Int32.TryParse(tempstring, out tempint);
+                    if (tempstring.ToLower() == "help")
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("By default, the !pokemon command will pick a random generation from gen 1-8");
+                        Console.WriteLine("if you would like to exclude certain generations, you can edit the default");
+                        Console.WriteLine("ex: if the maximum generation is 3, all gen 4+ Pokémon will be excluded,");
+                        Console.WriteLine("  but gen 4 Pokémon can still be picked with '!pokemon 4'");
+                        Console.WriteLine("For defaults, the maximum must be equal or larger than the minimum.");
+                    }
+                } while (!goodInt);
+                Properties.Settings.Default.defaultGenerationMax = tempint;
+                if (Properties.Settings.Default.defaultGenerationMin > Properties.Settings.Default.defaultGenerationMax)
+                {
+                    Console.WriteLine("The maximum default generation must be equal or larger than the minimum.");
+                    Console.WriteLine("================");
+                }
+            } while (Properties.Settings.Default.defaultGenerationMin > Properties.Settings.Default.defaultGenerationMax);
+
+            string accept;
+            do
+            {
+                Console.WriteLine();
+                Console.WriteLine("Should the Pokémon be posted in this console when the game starts? (y/n)");
+                accept = Console.ReadLine().ToLower();
+            } while (accept != "y" && accept != "n");
+            Properties.Settings.Default.tellMe = ((accept == "y") ? true : false);
+
+            do
+            {
+                Console.WriteLine();
+                Console.WriteLine("Should moderators be allowed to start and end the game? (y/n)");
+                accept = Console.ReadLine().ToLower();
+            } while (accept != "y" && accept != "n");
+            Properties.Settings.Default.modStart = ((accept == "y") ? true : false);
+
+            do
+            {
+                Console.WriteLine();
+                Console.WriteLine("Should moderators be allowed to ask for hints? (y/n)");
+                accept = Console.ReadLine().ToLower();
+            } while (accept != "y" && accept != "n");
+            Properties.Settings.Default.modHint = ((accept == "y") ? true : false);
         }
     }
 }

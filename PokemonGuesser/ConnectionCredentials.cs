@@ -1,6 +1,6 @@
 ﻿using TwitchLib.Client.Models;
 
-namespace PokemonGuesser
+namespace PokeGuesser
 {
     internal class ConnectionCredentials : TwitchLib.Client.Models.ConnectionCredentials
     {
