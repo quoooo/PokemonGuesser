@@ -411,7 +411,7 @@ namespace PokeGuesser
             Console.WriteLine("Enter the bot's OAuth token - you can find it at twitchapps.com/tmi");
             Properties.Settings.Default.oauth = Console.ReadLine();
             Console.WriteLine("Enter the twitch account the bot will join:");
-            Properties.Settings.Default.channel = Console.ReadLine();
+            Properties.Settings.Default.channel = Console.ReadLine().ToLower();
 
             string accept;
             do
