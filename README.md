@@ -42,7 +42,7 @@ The current guessing game will end, and the answer will be posted in chat.
 Take a guess at the answer. The bot will let you know if you are right.
 
 ## Contributors
-Yeah, just me. But you know what? I deserve it. ([@ironically_quo](https://twitter.com/ironically_quo))
+Just little ol me. ([@ironically_quo](https://twitter.com/ironically_quo))
 
 ## Credits
 
